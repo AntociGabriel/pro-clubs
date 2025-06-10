@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/mongoose';
 import TeamRequest from '@/models/TeamRequest';
+import Team from '@/models/Team';
 
 export async function GET(req: Request) {
   await dbConnect();
@@ -27,6 +28,13 @@ export async function PATCH(req: Request) {
     if (!request) return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
     request.status = action === 'accept' ? 'accepted' : 'rejected';
     await request.save();
+    
+    if (action === 'accept') {
+      await Team.findByIdAndUpdate(request.team, {
+        $addToSet: { members: request.user }
+      });
+    }
+    
     return NextResponse.json({ request });
   } catch (e) {
     return NextResponse.json({ error: 'Ошибка обработки заявки' }, { status: 500 });

@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import Sidebar from '@/components/Sidebar'
 import { useState, useEffect } from 'react'
+import { Providers } from './providers'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -34,14 +35,16 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className={`${inter.variable} ${orbitron.variable} font-sans bg-gray-50`}>
-        <Navbar />
-        <div className="flex min-h-screen pt-16">
-          <Sidebar />
-          <div className="flex-1">
-            {children}
+        <Providers>
+          <Navbar />
+          <div className="flex min-h-screen pt-16">
+            <Sidebar />
+            <div className="flex-1">
+              {children}
+            </div>
           </div>
-        </div>
-        <Footer />
+          <Footer />
+        </Providers>
       </body>
     </html>
   )

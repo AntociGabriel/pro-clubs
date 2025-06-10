@@ -3,10 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 export default function Navbar() {
   const pathname = usePathname()
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const { data: session } = useSession()
+  const userEmail = session?.user?.email || null
   const [showMenu, setShowMenu] = useState(false)
   const [myTeam, setMyTeam] = useState<any>(null)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -14,11 +16,6 @@ export default function Navbar() {
   const router = useRouter()
   const [modalRequestIndex, setModalRequestIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setUserEmail(window.localStorage.getItem('user_email'));
-    }
-  }, [])
 
   useEffect(() => {
     if (userEmail) {
@@ -180,7 +177,7 @@ export default function Navbar() {
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-lg z-50">
                   <Link href="/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">Профиль</Link>
-                  <button onClick={() => {window.localStorage.removeItem('user_email'); window.location.reload();}} className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100">Выйти</button>
+                  <Link href="/api/auth/signout" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100">Выйти</Link>
                 </div>
               )}
             </div>
@@ -195,7 +192,10 @@ export default function Navbar() {
               {myTeam ? (
                 <button onClick={() => router.push(`/teams/${myTeam._id}`)} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition">Моя команда</button>
               ) : (
-                <button onClick={() => router.push('/teams/create')} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition">Создать команду</button>
+                <div className="flex gap-2">
+                  <button onClick={() => router.push('/teams')} className="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700 transition">Вступить в команду</button>
+                  <button onClick={() => router.push('/teams/create')} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition">Создать команду</button>
+                </div>
               )}
             </>
           )}

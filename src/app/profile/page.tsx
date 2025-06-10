@@ -20,52 +20,86 @@ const ProfilePage = () => {
     platform: '',
     country: '',
     eaId: '',
-    nickname: '',
     originId: '',
     positions: '',
     password: '',
   });
   const [message, setMessage] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [edit, setEdit] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [myTeam, setMyTeam] = useState<any>(null);
 
-  // Для примера: email пользователя можно получить из localStorage или query
+  // Получаем данные профиля и команды
   React.useEffect(() => {
-    const email = window.localStorage.getItem('user_email') || '';
-    if (email) {
-      fetch(`/api/profile?email=${encodeURIComponent(email)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.email) {
-            setForm({
-              email: data.email,
-              name: data.name || '',
-              image: data.image || '',
-              platform: data.platform || '',
-              country: data.country || '',
-              eaId: data.eaId || '',
-              nickname: data.nickname || '',
-              originId: data.originId || '',
-              positions: (data.positions || []).join(','),
-              password: '',
-            });
-            setLoaded(true);
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/auth/session');
+        const session = await res.json();
+        
+        if (session?.user?.id) {
+          const profileRes = await fetch(`/api/profile?id=${session.user.id}`);
+          if (!profileRes.ok) {
+            throw new Error(profileRes.status === 404 ? 'Профиль не найден' : 'Ошибка загрузки профиля');
           }
-        });
-    }
-  }, []);
+          const data = await profileRes.json();
+          setForm({
+            email: data.email,
+            name: data.name || data.email.split('@')[0],
+            image: data.image || '',
+            platform: data.platform || '',
+            country: data.country || '',
+            eaId: data.eaId || '',
+            originId: data.originId || '',
+            positions: (data.positions || []).join(','),
+            password: '',
+          });
+          setLoaded(true);
+          setError('');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+        setLoaded(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchMyTeam = async () => {
+      try {
+        const res = await fetch(`/api/teams/search?member=${form.email}`);
+        const data = await res.json();
+        setMyTeam(data.teams && data.teams.length > 0 ? data.teams[0] : null);
+      } catch {
+        setMyTeam(null);
+      }
+    };
+
+    fetchProfile();
+    if (form.email) fetchMyTeam();
+  }, [form.email]);
+
+  if (!loaded) {
+    return (
+      <div className="text-center mt-10">
+        {loading ? 'Загрузка профиля...' : error || 'Загрузка профиля...'}
+      </div>
+    );
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((prev: typeof form) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handlePositionChange = (position: string) => {
-    const arr = form.positions ? form.positions.split(',').map((p) => p.trim()) : [];
+    const arr = form.positions ? form.positions.split(',').map((p: string) => p.trim()) : [];
     const newArr = arr.includes(position)
-      ? arr.filter((p) => p !== position)
+      ? arr.filter((p: string) => p !== position)
       : [...arr, position];
-    setForm({ ...form, positions: newArr.join(',') });
+    setForm((prev) => ({ ...prev, positions: newArr.join(',') }));
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,9 +115,9 @@ const ProfilePage = () => {
     });
     const data = await res.json();
     if (data.secure_url) {
-      setForm(f => ({ ...f, image: data.secure_url }));
+      setForm((f: typeof form) => ({ ...f, image: data.secure_url }));
     } else {
-      alert('Ошибка загрузки аватара');
+      setError('Ошибка загрузки аватара');
     }
     setUploading(false);
   };
@@ -91,27 +125,34 @@ const ProfilePage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
-    const res = await fetch('/api/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        positions: form.positions.split(',').map((p) => p.trim()),
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          positions: form.positions.split(',').map((p) => p.trim()),
+          // Исключаем поля, которые нельзя изменять
+          name: undefined,
+          eaId: undefined,
+          originId: undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка обновления');
+      }
       setMessage('Профиль обновлён!');
-      setForm(f => ({ ...f, password: '' }));
+      setForm((f: typeof form) => ({ ...f, password: '' }));
       setEdit(false);
-    } else {
-      setMessage(data.error || 'Ошибка обновления');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Неизвестная ошибка');
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!loaded) {
-    return <div className="text-center mt-10">Загрузка профиля...</div>;
-  }
 
   return (
     <div className="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-xl shadow flex flex-col gap-8">
@@ -124,7 +165,7 @@ const ProfilePage = () => {
         />
         <div className="flex-1 flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-gray-900">{form.name || 'Без имени'}</span>
+            <span className="text-2xl font-bold text-gray-900">{form.email.split('@')[0]}</span>
             <span className="text-sm text-gray-400">{form.country}</span>
           </div>
           <div className="flex gap-4 flex-wrap text-gray-600 mt-2">
@@ -133,11 +174,33 @@ const ProfilePage = () => {
             <span><b>Email:</b> {form.email}</span>
           </div>
           <div className="flex gap-4 flex-wrap text-gray-600 mt-2">
-            {form.nickname && <span><b>Логин:</b> {form.nickname}</span>}
             {form.originId && <span><b>Origin ID:</b> {form.originId}</span>}
             <span><b>Позиции:</b> {form.positions || '-'}</span>
           </div>
-          <button onClick={() => setEdit(true)} className="mt-4 px-5 py-2 bg-primary text-white rounded hover:bg-primary/90 transition">Редактировать профиль</button>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <button onClick={() => setEdit(true)} className="px-5 py-2 bg-primary text-white rounded hover:bg-primary/90 transition">
+              Редактировать профиль
+            </button>
+            {myTeam && (
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('/api/teams/leave', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ teamId: myTeam._id })
+                    });
+                    setMyTeam(null);
+                  } catch (err) {
+                    setMessage('Ошибка при выходе из команды');
+                  }
+                }}
+                className="px-5 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
+              >
+                Покинуть команду
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -149,9 +212,8 @@ const ProfilePage = () => {
             <h3 className="text-xl font-bold mb-4">Настройки профиля</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <input name="email" type="email" value={form.email} disabled className="w-full border p-2 rounded bg-gray-100" />
-              <input name="nickname" type="text" value={form.nickname || ''} disabled className="w-full border p-2 rounded bg-gray-100" placeholder="Логин (никнейм)" />
+              <input name="name" type="text" value={form.name || ''} disabled className="w-full border p-2 rounded bg-gray-100" placeholder="Имя" />
               <input name="originId" type="text" value={form.originId || ''} disabled className="w-full border p-2 rounded bg-gray-100" placeholder="Origin ID" />
-              <input name="name" type="text" placeholder="Имя" value={form.name} onChange={handleChange} className="w-full border p-2 rounded" />
               <div className="flex items-center gap-4">
                 <img src={form.image || '/images/default-avatar.png'} alt="Аватар" className="w-16 h-16 rounded-full object-cover border-2 border-primary" />
                 <input type="file" accept="image/*" onChange={handleAvatarUpload} className="block" />
@@ -189,9 +251,21 @@ const ProfilePage = () => {
                 </div>
               </div>
               <input name="password" type="password" placeholder="Новый пароль (если нужно сменить)" value={form.password} onChange={handleChange} className="w-full border p-2 rounded" />
-              <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded">Сохранить</button>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? 'Сохранение...' : 'Сохранить'}
+              </button>
             </form>
-            {message && <div className="mt-4 text-center text-green-600">{message}</div>}
+            {message && (
+              <div className={`mt-4 text-center ${
+                message.includes('Ошибка') ? 'text-red-600' : 'text-green-600'
+              }`}>
+                {message}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -199,4 +273,4 @@ const ProfilePage = () => {
   );
 };
 
-export default ProfilePage; 
+export default ProfilePage;
