@@ -1,8 +1,12 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { toast } from 'react-hot-toast';
 
-const CLOUDINARY_CLOUD_NAME = 'dcxyabzas';
-const CLOUDINARY_UPLOAD_PRESET = 'unsigned-profile';
+const CLOUDINARY_CLOUD_NAME = 'dqwqjqjqj';
+const CLOUDINARY_UPLOAD_PRESET = 'ml_default';
 
 const countries = [
   "Россия", "Украина", "Беларусь", "Казахстан", "Германия", "Франция", "Италия", "Испания", "Англия", "США", "Канада", "Бразилия", "Аргентина", "Португалия", "Польша", "Турция", "Китай", "Япония", "Южная Корея", "Австралия", "Нидерланды", "Швеция", "Норвегия", "Дания", "Швейцария", "Австрия", "Бельгия", "Чехия", "Сербия", "Хорватия", "Греция", "Румыния", "Венгрия", "Словакия", "Словения", "Болгария", "Грузия", "Армения", "Азербайджан", "Узбекистан", "Эстония", "Латвия", "Литва", "Финляндия", "Ирландия", "Шотландия", "Уэльс", "Исландия", "Мексика", "Колумбия", "Чили", "Перу", "Эквадор", "Уругвай", "Парагвай", "Венесуэла", "Коста-Рика", "Панама", "Ямайка", "Египет", "Марокко", "Тунис", "Алжир", "Камерун", "Сенегал", "Нигерия", "ЮАР", "Гана", "Кот-д'Ивуар", "Мали", "Ангола", "Замбия", "Зимбабве", "Катар", "Саудовская Аравия", "ОАЭ", "Иран", "Ирак", "Израиль", "Индия", "Индонезия", "Таиланд", "Вьетнам", "Малайзия", "Сингапур", "Филиппины", "Новая Зеландия", "Кипр", "Черногория", "Македония", "Албания", "Люксембург", "Лихтенштейн", "Монако", "Сан-Марино", "Андорра", "Мальта", "Босния и Герцеговина", "Косово", "Молдова", "Белиз", "Боливия", "Гватемала", "Гондурас", "Никарагуа", "Сальвадор", "Суринам", "Тринидад и Тобаго", "Барбадос", "Багамы", "Гаити", "Доминикана", "Куба", "Пуэрто-Рико", "Гренада", "Сент-Люсия", "Сент-Винсент и Гренадины", "Антигуа и Барбуда", "Сент-Китс и Невис", "Бруней", "Монголия", "Камбоджа", "Лаос", "Мьянма", "Непал", "Пакистан", "Бангладеш", "Шри-Ланка", "Мальдивы", "Бутан", "Афганистан", "Таджикистан", "Киргизия", "Туркмения", "Папуа — Новая Гвинея", "Фиджи", "Тонга", "Самоа", "Вануату", "Соломоновы Острова", "Тувалу", "Кирибати", "Маршалловы Острова", "Палау", "Микронезия"
@@ -12,263 +16,310 @@ const positionsList = [
   "GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST", "CF"
 ];
 
+interface Team {
+  id: string;
+  name: string;
+  logo: string;
+  members: string[];
+  captain: string;
+  elo: number;
+  rating: number;
+  joinedAt?: string;
+}
+
+interface TeamRequest {
+  id: string;
+  team: {
+    id: string;
+    name: string;
+    logo: string;
+  };
+  status: string;
+  createdAt: string;
+}
+
 const ProfilePage = () => {
-  const [form, setForm] = useState({
-    email: '',
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
     name: '',
+    nickname: '',
     image: '',
     platform: '',
     country: '',
     eaId: '',
-    originId: '',
-    positions: '',
-    password: '',
+    positions: [] as string[],
   });
-  const [message, setMessage] = useState('');
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [edit, setEdit] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [myTeam, setMyTeam] = useState<any>(null);
+  const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
+  const [teamHistory, setTeamHistory] = useState<Team[]>([]);
+  const [teamRequests, setTeamRequests] = useState<TeamRequest[]>([]);
 
-  // Получаем данные профиля и команды
-  React.useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/auth/session');
-        const session = await res.json();
-        
-        if (session?.user?.id) {
-          const profileRes = await fetch(`/api/profile?id=${session.user.id}`);
-          if (!profileRes.ok) {
-            throw new Error(profileRes.status === 404 ? 'Профиль не найден' : 'Ошибка загрузки профиля');
-          }
-          const data = await profileRes.json();
-          setForm({
-            email: data.email,
-            name: data.name || data.email.split('@')[0],
-            image: data.image || '',
-            platform: data.platform || '',
-            country: data.country || '',
-            eaId: data.eaId || '',
-            originId: data.originId || '',
-            positions: (data.positions || []).join(','),
-            password: '',
-          });
-          setLoaded(true);
-          setError('');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
-        setLoaded(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchMyTeam = async () => {
-      try {
-        const res = await fetch(`/api/teams/search?member=${form.email}`);
-        const data = await res.json();
-        setMyTeam(data.teams && data.teams.length > 0 ? data.teams[0] : null);
-      } catch {
-        setMyTeam(null);
-      }
-    };
-
-    fetchProfile();
-    if (form.email) fetchMyTeam();
-  }, [form.email]);
-
-  if (!loaded) {
-    return (
-      <div className="text-center mt-10">
-        {loading ? 'Загрузка профиля...' : error || 'Загрузка профиля...'}
-      </div>
-    );
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm((prev: typeof form) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handlePositionChange = (position: string) => {
-    const arr = form.positions ? form.positions.split(',').map((p: string) => p.trim()) : [];
-    const newArr = arr.includes(position)
-      ? arr.filter((p: string) => p !== position)
-      : [...arr, position];
-    setForm((prev) => ({ ...prev, positions: newArr.join(',') }));
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    if (data.secure_url) {
-      setForm((f: typeof form) => ({ ...f, image: data.secure_url }));
-    } else {
-      setError('Ошибка загрузки аватара');
+  useEffect(() => {
+    if (session?.user?.email) {
+      fetchProfile();
     }
-    setUploading(false);
-  };
+  }, [session]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage('');
-    setLoading(true);
+  const fetchProfile = async () => {
     try {
-      const res = await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          positions: form.positions.split(',').map((p) => p.trim()),
-          // Исключаем поля, которые нельзя изменять
-          name: undefined,
-          eaId: undefined,
-          originId: undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Ошибка обновления');
+      const response = await fetch(`/api/profile?id=${session?.user?.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
       }
-      setMessage('Профиль обновлён!');
-      setForm((f: typeof form) => ({ ...f, password: '' }));
-      setEdit(false);
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Неизвестная ошибка');
+      const data = await response.json();
+      setFormData({
+        name: data.name || '',
+        nickname: data.nickname || '',
+        image: data.image || '',
+        platform: data.platform || '',
+        country: data.country || '',
+        eaId: data.eaId || '',
+        positions: data.positions || [],
+      });
+      setCurrentTeam(data.currentTeam);
+      setTeamHistory(data.teamHistory || []);
+      setTeamRequests(data.teamRequests || []);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      toast.error('Failed to load profile');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  return (
-    <div className="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-xl shadow flex flex-col gap-8">
-      {/* Профиль */}
-      <div className="flex flex-col md:flex-row items-center gap-6">
-        <img
-          src={form.image || '/images/default-avatar.png'}
-          alt="Аватар"
-          className="w-32 h-32 rounded-full object-cover border-4 border-primary shadow"
-        />
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-gray-900">{form.email.split('@')[0]}</span>
-            <span className="text-sm text-gray-400">{form.country}</span>
-          </div>
-          <div className="flex gap-4 flex-wrap text-gray-600 mt-2">
-            <span><b>Платформа:</b> {form.platform || '-'}</span>
-            <span><b>EA ID:</b> {form.eaId || '-'}</span>
-            <span><b>Email:</b> {form.email}</span>
-          </div>
-          <div className="flex gap-4 flex-wrap text-gray-600 mt-2">
-            {form.originId && <span><b>Origin ID:</b> {form.originId}</span>}
-            <span><b>Позиции:</b> {form.positions || '-'}</span>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            <button onClick={() => setEdit(true)} className="px-5 py-2 bg-primary text-white rounded hover:bg-primary/90 transition">
-              Редактировать профиль
-            </button>
-            {myTeam && (
-              <button
-                onClick={async () => {
-                  try {
-                    await fetch('/api/teams/leave', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ teamId: myTeam._id })
-                    });
-                    setMyTeam(null);
-                  } catch (err) {
-                    setMessage('Ошибка при выходе из команды');
-                  }
-                }}
-                className="px-5 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
-              >
-                Покинуть команду
-              </button>
-            )}
-          </div>
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to upload image');
+      }
+
+      const data = await response.json();
+      setFormData(prev => ({ ...prev, image: data.secure_url }));
+      toast.success('Avatar updated successfully');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.error('Failed to upload avatar');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center">Loading...</div>
         </div>
       </div>
+    );
+  }
 
-      {/* Модальное окно настроек */}
-      {edit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setEdit(false)} className="absolute top-3 right-3 text-gray-400 hover:text-primary text-2xl">×</button>
-            <h3 className="text-xl font-bold mb-4">Настройки профиля</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input name="email" type="email" value={form.email} disabled className="w-full border p-2 rounded bg-gray-100" />
-              <input name="name" type="text" value={form.name || ''} disabled className="w-full border p-2 rounded bg-gray-100" placeholder="Имя" />
-              <input name="originId" type="text" value={form.originId || ''} disabled className="w-full border p-2 rounded bg-gray-100" placeholder="Origin ID" />
-              <div className="flex items-center gap-4">
-                <img src={form.image || '/images/default-avatar.png'} alt="Аватар" className="w-16 h-16 rounded-full object-cover border-2 border-primary" />
-                <input type="file" accept="image/*" onChange={handleAvatarUpload} className="block" />
-                {uploading && <span className="text-xs text-gray-400 ml-2">Загрузка...</span>}
-              </div>
-              <select name="platform" value={form.platform} onChange={handleChange} required className="w-full border p-2 rounded">
-                <option value="">Платформа</option>
-                <option value="PC">PC</option>
-                <option value="PS">PlayStation</option>
-                <option value="Xbox">Xbox</option>
-              </select>
-              <select name="country" value={form.country} onChange={handleChange} required className="w-full border p-2 rounded">
-                <option value="">Страна</option>
-                {countries.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <div>
-                <div className="mb-2 font-medium">Позиции:</div>
-                <div className="flex flex-wrap gap-2">
-                  {positionsList.map((pos) => {
-                    const arr = form.positions ? form.positions.split(',').map((p) => p.trim()) : [];
-                    return (
-                      <label key={pos} className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={arr.includes(pos)}
-                          onChange={() => handlePositionChange(pos)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>{pos}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-              <input name="password" type="password" placeholder="Новый пароль (если нужно сменить)" value={form.password} onChange={handleChange} className="w-full border p-2 rounded" />
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
-                disabled={loading}
+  return (
+    <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        {/* Profile Information */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-center mb-8">
+            <div className="relative w-32 h-32 mx-auto mb-4">
+              <Image
+                src={formData.image || '/default-avatar.png'}
+                alt="Profile"
+                fill
+                className="rounded-full object-cover"
+              />
+              <label
+                htmlFor="avatar-upload"
+                className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full cursor-pointer hover:bg-blue-600"
               >
-                {loading ? 'Сохранение...' : 'Сохранить'}
-              </button>
-            </form>
-            {message && (
-              <div className={`mt-4 text-center ${
-                message.includes('Ошибка') ? 'text-red-600' : 'text-green-600'
-              }`}>
-                {message}
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </label>
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">{formData.name}</h2>
+            <p className="text-gray-500">{formData.nickname}</p>
+            <button
+              onClick={() => router.push('/profile/edit')}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Edit Profile
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Platform</h3>
+                <p className="mt-1 text-sm text-gray-900">{formData.platform || 'Not specified'}</p>
               </div>
-            )}
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Country</h3>
+                <p className="mt-1 text-sm text-gray-900">{formData.country || 'Not specified'}</p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">EA ID</h3>
+                <p className="mt-1 text-sm text-gray-900">{formData.eaId || 'Not specified'}</p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Positions</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {formData.positions.length > 0 ? (
+                  formData.positions.map((position) => (
+                    <span
+                      key={position}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {position}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No positions specified</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Current Team Section */}
+        {currentTeam && (
+          <div className="mt-8 bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Current Team</h3>
+            <div className="flex items-center space-x-4">
+              {currentTeam.logo && (
+                <div className="relative w-16 h-16">
+                  <Image
+                    src={currentTeam.logo}
+                    alt={currentTeam.name}
+                    fill
+                    className="rounded-full object-cover"
+                  />
+                </div>
+              )}
+              <div>
+                <h4 className="text-lg font-medium text-gray-900">{currentTeam.name}</h4>
+                <p className="text-sm text-gray-500">
+                  {currentTeam.captain === session?.user?.id ? 'Captain' : 'Member'}
+                </p>
+                <div className="mt-2 flex items-center space-x-4">
+                  <span className="text-sm text-gray-500">ELO: {currentTeam.elo}</span>
+                  <span className="text-sm text-gray-500">Rating: {currentTeam.rating}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team History Section */}
+        {teamHistory.length > 0 && (
+          <div className="mt-8 bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Team History</h3>
+            <div className="space-y-4">
+              {teamHistory.map((team) => (
+                <div key={team.id} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  {team.logo && (
+                    <div className="relative w-12 h-12">
+                      <Image
+                        src={team.logo}
+                        alt={team.name}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900">{team.name}</h4>
+                    <p className="text-sm text-gray-500">
+                      {team.captain === session?.user?.id ? 'Captain' : 'Member'}
+                    </p>
+                    <div className="mt-1 flex items-center space-x-4">
+                      <span className="text-sm text-gray-500">ELO: {team.elo}</span>
+                      <span className="text-sm text-gray-500">Rating: {team.rating}</span>
+                      {team.joinedAt && (
+                        <span className="text-sm text-gray-500">
+                          Joined: {new Date(team.joinedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Team Requests Section */}
+        {teamRequests.length > 0 && (
+          <div className="mt-8 bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Team Requests</h3>
+            <div className="space-y-4">
+              {teamRequests.map((request) => (
+                <div key={request.id} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  {request.team.logo && (
+                    <div className="relative w-12 h-12">
+                      <Image
+                        src={request.team.logo}
+                        alt={request.team.name}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900">{request.team.name}</h4>
+                    <p className="text-sm text-gray-500">
+                      Status: {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Date: {new Date(request.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

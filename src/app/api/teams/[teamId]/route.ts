@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
-import Team from '@/models/Team'
+import { Team } from '@/models/Team'
 import { dbConnect } from '@/lib/mongoose'
 import mongoose from 'mongoose'
 
@@ -10,37 +10,21 @@ export async function GET(
   { params }: { params: { teamId: string } }
 ) {
   try {
-    console.log('GET /api/teams/[teamId] params:', params)
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     await dbConnect()
-    console.log('Searching for team with ID:', params.teamId)
-    
-    if (!mongoose.Types.ObjectId.isValid(params.teamId)) {
-      console.log('Invalid team ID format:', params.teamId)
-      return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 })
-    }
-    
     const team = await Team.findById(params.teamId)
-      .populate('captain', 'name email image')
-      .populate('members', 'name image')
-    
+      .populate('captain', 'email name nickname image')
+      .populate('members', 'email name nickname image')
+
     if (!team) {
-      console.log('Team not found with ID:', params.teamId)
       return NextResponse.json({ error: 'Team not found' }, { status: 404 })
     }
-    console.log('Found team:', team)
 
     return NextResponse.json(team)
   } catch (error) {
-    console.error('GET /api/teams/[teamId] error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    console.error('Error fetching team:', error)
+    return NextResponse.json({ 
+      error: 'Failed to fetch team' 
+    }, { status: 500 })
   }
 }
 

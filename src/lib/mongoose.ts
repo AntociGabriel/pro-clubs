@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.DATABASE_URL || 'mongodb://localhost:27017/fifa_fc_platform';
+const MONGODB_URI = process.env.DATABASE_URL || 'mongodb://localhost:27017/pro-clubs';
+const mongoURI = 'mongodb://localhost:27017/pro-clubs';
 
 if (!MONGODB_URI) {
   throw new Error('Не указана строка подключения к MongoDB (DATABASE_URL)');

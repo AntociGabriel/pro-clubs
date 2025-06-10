@@ -3,11 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
+import Image from 'next/image'
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const userEmail = session?.user?.email || null
   const [showMenu, setShowMenu] = useState(false)
   const [myTeam, setMyTeam] = useState<any>(null)
@@ -15,28 +16,29 @@ export default function Navbar() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
   const router = useRouter()
   const [modalRequestIndex, setModalRequestIndex] = useState<number | null>(null);
-
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userEmail) {
-      const fetchMyTeam = () => {
-        fetch(`/api/teams/search?member=${userEmail}`)
-          .then(async res => {
-            if (!res.ok) return {};
-            const text = await res.text();
-            if (!text) return {};
-            try { return JSON.parse(text); } catch { return {}; }
-          })
-          .then(data => {
-            setMyTeam(data.teams && data.teams.length > 0 ? data.teams[0] : null);
-          })
-          .catch(() => setMyTeam(null));
-      };
+    if (session?.user?.email) {
       fetchMyTeam();
-      const interval = setInterval(fetchMyTeam, 5000); // обновлять каждые 5 секунд
-      return () => clearInterval(interval);
     }
-  }, [userEmail]);
+  }, [session]);
+
+  const fetchMyTeam = async () => {
+    try {
+      const response = await fetch(`/api/teams/search?member=${session?.user?.email}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch team');
+      }
+      const data = await response.json();
+      setMyTeam(data);
+    } catch (error) {
+      console.error('Error fetching team:', error);
+      setMyTeam(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -169,26 +171,21 @@ export default function Navbar() {
             </div>
           )}
           {/* Профиль */}
-          {userEmail ? (
-            <div className="relative">
-              <button onClick={() => setShowMenu(v => !v)} className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold focus:outline-none focus:ring-2 focus:ring-primary">
-                {userEmail[0]?.toUpperCase()}
-              </button>
-              {showMenu && (
-                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-lg z-50">
-                  <Link href="/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">Профиль</Link>
-                  <Link href="/api/auth/signout" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100">Выйти</Link>
-                </div>
-              )}
-            </div>
-          ) : (
+          {status === 'loading' ? (
+            <div className="text-gray-600">Loading...</div>
+          ) : session ? (
             <>
-              <Link href="/login" className="px-4 py-2 text-sm font-medium text-primary border border-primary rounded hover:bg-primary hover:text-white transition-colors">Войти</Link>
-              <Link href="/register" className="px-4 py-2 text-sm font-medium bg-primary text-white rounded hover:bg-primary/90 transition-colors">Регистрация</Link>
-            </>
-          )}
-          {userEmail && (
-            <>
+              <div className="relative">
+                <button onClick={() => setShowMenu(v => !v)} className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold focus:outline-none focus:ring-2 focus:ring-primary">
+                  {userEmail[0]?.toUpperCase()}
+                </button>
+                {showMenu && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-lg z-50">
+                    <Link href="/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">Профиль</Link>
+                    <Link href="/api/auth/signout" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100">Выйти</Link>
+                  </div>
+                )}
+              </div>
               {myTeam ? (
                 <button onClick={() => router.push(`/teams/${myTeam._id}`)} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition">Моя команда</button>
               ) : (
@@ -198,6 +195,21 @@ export default function Navbar() {
                 </div>
               )}
             </>
+          ) : (
+            <div className="flex items-center space-x-4">
+              <Link
+                href="/api/auth/signin"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/register"
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              >
+                Register
+              </Link>
+            </div>
           )}
         </div>
       </div>

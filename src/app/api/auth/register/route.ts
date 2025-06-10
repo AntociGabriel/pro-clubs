@@ -3,8 +3,6 @@ import { dbConnect } from '@/lib/mongoose';
 import User from '@/models/User';
 import { hash } from 'bcryptjs';
 
-const EA_ID_REGEX = /^[A-Z]{3}\d{3}$/;
-
 export async function POST(req: Request) {
   await dbConnect();
   const data = await req.json();
@@ -16,10 +14,6 @@ export async function POST(req: Request) {
 
   if (password.length < 8) {
     return NextResponse.json({ error: 'Пароль должен быть не менее 8 символов' }, { status: 400 });
-  }
-
-  if (!EA_ID_REGEX.test(eaId)) {
-    return NextResponse.json({ error: 'EA ID должен быть в формате ABC123 (3 буквы + 3 цифры)' }, { status: 400 });
   }
 
   const [existingEmail, existingNickname, existingEaId] = await Promise.all([
